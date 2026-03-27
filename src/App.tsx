@@ -6,7 +6,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Plus, Trash2, Bell, Clock, CheckCircle2, AlertCircle, X, Calendar, Save } from 'lucide-react';
 import { format, isPast, parseISO, isValid } from 'date-fns';
-import { Toaster, toast } from 'sonner';
+import { Toaster } from '../components/ui/sonner';
+import { toast } from 'sonner';
 import { motion, AnimatePresence } from 'motion/react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
@@ -25,10 +26,8 @@ interface Reminder {
 }
 
 export default function App() {
-  const [reminders, setReminders] = useState<Reminder[]>(() => {
-    const saved = localStorage.getItem('reminders');
-    return saved ? JSON.parse(saved) : [];
-  });
+  const [remindersState, setRemindersState] = useState<Reminder[]>([]);
+  const [isLoaded, setIsLoaded] = useState(false);
   
   const [inputText, setInputText] = useState('');
   const [inputDate, setInputDate] = useState('');
@@ -39,10 +38,42 @@ export default function App() {
   const [editDate, setEditDate] = useState('');
   const [editTime, setEditTime] = useState('');
 
-  // Save to localStorage
+  // Custom setter that syncs with chrome.storage
+  const setReminders = (updater: React.SetStateAction<Reminder[]>) => {
+    setRemindersState(prev => {
+      const next = typeof updater === 'function' ? updater(prev) : updater;
+      const isExt = typeof chrome !== 'undefined' && chrome.storage;
+      if (isExt) {
+        chrome.storage.local.set({ reminders: next });
+      } else {
+        localStorage.setItem('reminders', JSON.stringify(next));
+      }
+      return next;
+    });
+  };
+
+  // Load initial data and listen for background changes
   useEffect(() => {
-    localStorage.setItem('reminders', JSON.stringify(reminders));
-  }, [reminders]);
+    const isExt = typeof chrome !== 'undefined' && chrome.storage;
+    if (isExt) {
+      chrome.storage.local.get(['reminders'], (res) => {
+        if (res.reminders) setRemindersState(res.reminders);
+        setIsLoaded(true);
+      });
+      
+      const listener = (changes: any, namespace: string) => {
+        if (namespace === 'local' && changes.reminders) {
+          setRemindersState(changes.reminders.newValue);
+        }
+      };
+      chrome.storage.onChanged.addListener(listener);
+      return () => chrome.storage.onChanged.removeListener(listener);
+    } else {
+      const saved = localStorage.getItem('reminders');
+      if (saved) setRemindersState(JSON.parse(saved));
+      setIsLoaded(true);
+    }
+  }, []);
 
   // Check for overdue reminders every 10 seconds
   useEffect(() => {
@@ -131,23 +162,25 @@ export default function App() {
   };
 
   const sortedReminders = useMemo(() => {
-    return [...reminders].sort((a, b) => {
+    return [...remindersState].sort((a, b) => {
       if (a.isDone === b.isDone) {
         return new Date(a.dateTime).getTime() - new Date(b.dateTime).getTime();
       }
       return a.isDone ? 1 : -1;
     });
-  }, [reminders]);
+  }, [remindersState]);
+
+  if (!isLoaded) return null; // Prevent flicker while loading from storage
 
   return (
-    <div className="min-h-screen bg-[#F5F5F5] flex items-center justify-center p-4 font-sans text-[#1A1A1A]" dir="rtl">
+    <div className="w-[400px] min-h-[500px] bg-[#F5F5F5] flex items-center justify-center p-4 font-sans text-[#1A1A1A]" dir="rtl">
       <Toaster position="top-center" richColors closeButton />
       
       {/* Extension Container */}
       <motion.div 
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="w-full max-w-[400px] bg-white rounded-2xl shadow-2xl overflow-hidden border border-gray-200"
+        className="w-full bg-white rounded-2xl shadow-2xl overflow-hidden border border-gray-200"
       >
         {/* Header */}
         <header className="bg-white border-b border-gray-100 p-6 flex items-center justify-between">
@@ -347,8 +380,8 @@ export default function App() {
 
         {/* Footer Stats */}
         <footer className="p-4 bg-gray-50 border-t border-gray-100 flex justify-between items-center text-[10px] text-gray-400 font-bold uppercase tracking-widest">
-          <div>משימות: {reminders.length}</div>
-          <div>הושלמו: {reminders.filter(r => r.isDone).length}</div>
+          <div>משימות: {remindersState.length}</div>
+          <div>הושלמו: {remindersState.filter(r => r.isDone).length}</div>
         </footer>
       </motion.div>
 
