@@ -1,0 +1,5 @@
+{
+  "name": "Reminder Hub",
+  "description": "A Chrome-style reminder extension with real-time alerts for overdue tasks.",
+  "requestFramePermissions": []
+}
