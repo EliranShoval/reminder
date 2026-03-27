@@ -63,7 +63,22 @@ export default function App() {
       
       const listener = (changes: any, namespace: string) => {
         if (namespace === 'local' && changes.reminders) {
-          setRemindersState(changes.reminders.newValue);
+          const oldReminders = changes.reminders.oldValue || [];
+          const newReminders = changes.reminders.newValue || [];
+          
+          newReminders.forEach((newR: Reminder) => {
+            const oldR = oldReminders.find((r: Reminder) => r.id === newR.id);
+            // If it just became notified (by the background script)
+            if (newR.notified && (!oldR || !oldR.notified)) {
+              toast.error(`תזכורת עברה: ${newR.text}`, {
+                description: format(parseISO(newR.dateTime), 'HH:mm dd/MM/yyyy'),
+                icon: <AlertCircle className="w-5 h-5 text-red-500" />,
+                duration: 10000,
+              });
+            }
+          });
+          
+          setRemindersState(newReminders);
         }
       };
       chrome.storage.onChanged.addListener(listener);
@@ -73,32 +88,6 @@ export default function App() {
       if (saved) setRemindersState(JSON.parse(saved));
       setIsLoaded(true);
     }
-  }, []);
-
-  // Check for overdue reminders every 10 seconds
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setReminders(prev => {
-        let changed = false;
-        const next = prev.map(r => {
-          const reminderDate = parseISO(r.dateTime);
-          // Notify only ONCE per task when it becomes overdue
-          if (!r.isDone && !r.notified && isPast(reminderDate)) {
-            toast.error(`תזכורת עברה: ${r.text}`, {
-              description: format(reminderDate, 'HH:mm dd/MM/yyyy'),
-              icon: <AlertCircle className="w-5 h-5 text-red-500" />,
-              duration: 10000,
-            });
-            changed = true;
-            return { ...r, notified: true };
-          }
-          return r;
-        });
-        return changed ? next : prev;
-      });
-    }, 10000);
-
-    return () => clearInterval(interval);
   }, []);
 
   const handleAddReminder = (e: React.FormEvent) => {
