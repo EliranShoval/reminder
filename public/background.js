@@ -42,14 +42,15 @@ chrome.alarms.onAlarm.addListener((alarm) => {
 function triggerNotification(reminder) {
   chrome.notifications.create(`notif_${reminder.id}`, {
     type: 'basic',
-    iconUrl: 'icon.png',
+    iconUrl: chrome.runtime.getURL('icon.png'), // חובה להשתמש בנתיב המלא של התוסף
     title: 'Reminder Hub',
     message: `⏰ תזכורת: ${reminder.text}`,
     priority: 2,
     requireInteraction: true
   }, (notificationId) => {
     if (chrome.runtime.lastError) {
-      console.error("Notification Error:", chrome.runtime.lastError);
+      // הדפסת השגיאה המדויקת במקום [object Object]
+      console.error("Notification Error:", chrome.runtime.lastError.message || chrome.runtime.lastError);
     }
   });
 
